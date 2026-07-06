@@ -143,7 +143,7 @@ const DEMO_RESOURCES = [
     type: [{ text: 'Emergency Department Visit' }],
     subject: PATIENT_REF,
     period: { start: daysAgo(22, 19, 4), end: daysAgo(22, 23, 55) },
-    reasonCode: [{ text: 'Dyspnea — acute CHF exacerbation, diuresed and discharged' }],
+    reasonCode: [{ text: 'Acute heart failure exacerbation' }],
     serviceProvider: { display: 'University Medical Center' }
   },
   {
@@ -154,7 +154,7 @@ const DEMO_RESOURCES = [
     type: [{ text: 'Office Visit — Primary Care' }],
     subject: PATIENT_REF,
     period: { start: daysAgo(8, 9, 30), end: daysAgo(8, 10, 10) },
-    reasonCode: [{ text: 'Post-ED follow-up; furosemide increased, apixaban dose reduced' }],
+    reasonCode: [{ text: 'Post-ED follow-up' }],
     participant: [{ individual: { display: 'Elliot Reid, MD (Primary Care)' } }],
     serviceProvider: { display: 'University Medical Center — Internal Medicine Clinic' }
   },
@@ -166,7 +166,7 @@ const DEMO_RESOURCES = [
     type: [{ text: 'Office Visit — Cardiology' }],
     subject: PATIENT_REF,
     period: { start: daysAgo(16, 13, 0), end: daysAgo(16, 13, 40) },
-    reasonCode: [{ text: 'HFrEF / AFib management; ICD interrogation normal' }],
+    reasonCode: [{ text: 'HFrEF / AFib management' }],
     participant: [{ individual: { display: 'Kim Briggs, MD (Cardiology)' } }],
     serviceProvider: { display: 'University Medical Center — Cardiology Clinic' }
   },
@@ -178,43 +178,50 @@ const DEMO_RESOURCES = [
     type: [{ text: 'Inpatient Admission' }],
     subject: PATIENT_REF,
     period: { start: daysAgo(94, 8, 0), end: daysAgo(90, 11, 0) },
-    reasonCode: [{ text: 'Acute on chronic HFrEF exacerbation; IV diuresis' }],
+    reasonCode: [{ text: 'Acute on chronic heart failure exacerbation' }],
     serviceProvider: { display: 'University Medical Center' }
   },
 
   /* ------------------------------------------------------------- Conditions */
-  condition('cond-afib', '49436004', 'Atrial fibrillation', '2019-08-01', { note: 'CHA2DS2-VASc 5. On apixaban.' }),
-  condition('cond-hfref', '703272007', 'Heart failure with reduced ejection fraction (EF 30%)', '2021-02-01', { note: 'Last TTE ' + dateDaysAgo(45) + ': EF 30%, moderate MR.' }),
+  condition('cond-afib', '49436004', 'Atrial fibrillation', '2019-08-01'),
+  condition('cond-hfref', '703272007', 'Heart failure with reduced ejection fraction (EF 30%)', '2021-02-01'),
   condition('cond-cad', '53741008', 'Coronary artery disease s/p DES to LAD (2023)', '2023-05-01'),
-  condition('cond-ckd', '700379002', 'Chronic kidney disease stage 3B', '2022-01-01', { note: 'Baseline creatinine 1.5–1.6 mg/dL.' }),
+  condition('cond-ckd', '700379002', 'Chronic kidney disease stage 3B', '2022-01-01'),
   condition('cond-dm', '44054006', 'Type 2 diabetes mellitus with peripheral neuropathy', '2012-01-01'),
   condition('cond-copd', '13645005', 'Chronic obstructive pulmonary disease (GOLD II)', '2015-01-01'),
   condition('cond-htn', '38341003', 'Essential hypertension', '2008-01-01'),
 
   /* ------------------------------------------------------------ Medications */
+  /* Dose changes are represented the way Epic exposes them: the prior order
+     appears as a separate MedicationRequest with status "stopped"; the UI
+     derives "previously …" by comparing same-drug orders. */
   medRequest('med-apixaban', 'Apixaban (Eliquis) 2.5 mg tablet', '2.5 mg PO twice daily', dateDaysAgo(8), {
     rxnorm: '1364445',
-    requester: 'Elliot Reid, MD',
-    note: 'DOSE REDUCED from 5 mg BID on ' + dateDaysAgo(8) + ' after outside-hospital GI bleed (age >80 criteria not met; reduced for bleed history + rising creatinine).'
+    requester: 'Elliot Reid, MD'
+  }),
+  medRequest('med-apixaban-old', 'Apixaban (Eliquis) 5 mg tablet', '5 mg PO twice daily', '2024-02-12', {
+    rxnorm: '1364447',
+    status: 'stopped'
   }),
   medRequest('med-metoprolol', 'Metoprolol succinate ER 100 mg tablet', '100 mg PO daily', '2024-11-02', { rxnorm: '866414' }),
   medRequest('med-furosemide', 'Furosemide 80 mg tablet', '80 mg PO twice daily', dateDaysAgo(8), {
     rxnorm: '313988',
-    requester: 'Elliot Reid, MD',
-    note: 'INCREASED from 40 mg BID on ' + dateDaysAgo(8) + ' for persistent volume overload.'
+    requester: 'Elliot Reid, MD'
+  }),
+  medRequest('med-furosemide-old', 'Furosemide 40 mg tablet', '40 mg PO twice daily', '2025-09-30', {
+    rxnorm: '313987',
+    status: 'stopped'
   }),
   medRequest('med-amiodarone', 'Amiodarone 200 mg tablet', '200 mg PO daily', dateDaysAgo(16), {
     rxnorm: '834357',
-    requester: 'Kim Briggs, MD',
-    note: 'STARTED ' + dateDaysAgo(16) + ' for rhythm control after recurrent AFib with RVR.'
+    requester: 'Kim Briggs, MD'
   }),
   medRequest('med-lisinopril', 'Lisinopril 10 mg tablet', '10 mg PO daily', '2023-06-15', { rxnorm: '314076' }),
   medRequest('med-glargine', 'Insulin glargine (Lantus) 100 unit/mL', '24 units subcutaneous at bedtime', '2024-03-10', { rxnorm: '285018' }),
   medRequest('med-metformin', 'Metformin 500 mg tablet', '500 mg PO twice daily', '2020-01-05', { rxnorm: '861007' }),
   medRequest('med-atorvastatin', 'Atorvastatin 80 mg tablet', '80 mg PO daily', '2023-05-20', { rxnorm: '259255' }),
   medRequest('med-pantoprazole', 'Pantoprazole 40 mg tablet', '40 mg PO daily', dateDaysAgo(60), {
-    rxnorm: '763563',
-    note: 'Started after upper GI bleed (outside hospital, see scanned records).'
+    rxnorm: '763563'
   }),
   medRequest('med-tiotropium', 'Tiotropium (Spiriva) 18 mcg inhaler', '1 inhalation daily', '2018-09-01', { rxnorm: '485210' }),
   medRequest('med-albuterol', 'Albuterol HFA 90 mcg inhaler', '2 puffs every 4 hours as needed for wheeze', '2018-09-01', { rxnorm: '745752' }),
@@ -256,8 +263,7 @@ const DEMO_RESOURCES = [
     type: { coding: [{ system: 'http://snomed.info/sct', code: '72506001', display: 'Implantable cardioverter-defibrillator' }], text: 'Implantable cardioverter-defibrillator (ICD)' },
     manufacturer: 'Medtronic',
     deviceName: [{ name: 'Evera MRI XT DR', type: 'model-name' }],
-    patient: PATIENT_REF,
-    note: [{ text: 'Implanted 2024-01-18 for primary prevention (EF 30%). Last interrogation ' + dateDaysAgo(16) + ': normal function, no events.' }]
+    patient: PATIENT_REF
   },
 
   /* ------------------------------------------- Triage vitals (current ED) */
@@ -283,7 +289,7 @@ const DEMO_RESOURCES = [
     ]
   },
   /* Repeat vitals after 1 L LR */
-  vital('vs-hr-2', '8867-4', 'Heart rate', 124, '/min', todayAt(15, 42), { interpretation: 'H', note: 'After 1 L lactated Ringers' }),
+  vital('vs-hr-2', '8867-4', 'Heart rate', 124, '/min', todayAt(15, 42), { interpretation: 'H' }),
   vital('vs-spo2-2', '59408-5', 'Oxygen saturation', 93, '%', todayAt(15, 42), { note: 'On 4 L nasal cannula' }),
   {
     resourceType: 'Observation',
@@ -327,8 +333,7 @@ const DEMO_RESOURCES = [
     code: { coding: [{ system: 'http://loinc.org', code: '600-7', display: 'Blood culture' }], text: 'Blood cultures x2' },
     subject: PATIENT_REF,
     encounter: CURRENT_ED_REF,
-    effectiveDateTime: todayAt(15, 5),
-    note: [{ text: 'Collected prior to antibiotics — PENDING' }]
+    effectiveDateTime: todayAt(15, 5)
   },
 
   /* --------------------------------------------- Historical labs (trends) */

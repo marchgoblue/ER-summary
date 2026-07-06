@@ -139,23 +139,29 @@
     vm.outsideLabs = [];
 
     for (const doc of vm.outsideDocs) {
-      if (!doc.imageDataUrl && !doc.fallbackText) continue;
-      onStatus && onStatus(doc, 'running');
-
-      let text = '', engine = 'none';
-      if (doc.imageDataUrl) {
-        const res = await ocrImage(doc.imageDataUrl);
-        text = res.text; engine = res.engine;
-      }
-      if ((!text || text.trim().length < 40) && doc.fallbackText) {
-        text = doc.fallbackText;
-        engine = engine === 'tesseract' ? 'tesseract-lowconf-fallback' : 'fallback';
-      }
-
+      if (!doc.imageDataUrl && !doc.fallbackText && !doc.ocr) continue;
       const docLabel = (doc.custodian || 'Outside facility') + ', ' + window.FhirData.fmtDate(doc.date);
-      const findings = parseOutsideDocument(text, docLabel);
-      findings.forEach(f => { f.docId = doc.id; });
-      doc.ocr = { text, engine, findings };
+
+      let findings;
+      if (doc.ocr && doc.ocr.findings) {
+        /* Already OCR'd (e.g. carried over across a data refresh) — reuse. */
+        findings = doc.ocr.findings;
+      } else {
+        onStatus && onStatus(doc, 'running');
+        let text = '', engine = 'none';
+        if (doc.imageDataUrl) {
+          const res = await ocrImage(doc.imageDataUrl);
+          text = res.text; engine = res.engine;
+        }
+        if ((!text || text.trim().length < 40) && doc.fallbackText) {
+          text = doc.fallbackText;
+          engine = engine === 'tesseract' ? 'tesseract-lowconf-fallback' : 'fallback';
+        }
+
+        findings = parseOutsideDocument(text, docLabel);
+        findings.forEach(f => { f.docId = doc.id; });
+        doc.ocr = { text, engine, findings };
+      }
 
       findings.forEach(f => {
         vm.outsideFindings.push(f);

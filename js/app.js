@@ -16,6 +16,9 @@
     trayOpen: false
   };
   let VM = null;
+  let LIVE_CLIENT = null;
+  let refreshing = false;
+  const AUTO_REFRESH_MS = 2 * 60 * 1000; // live mode polls the FHIR server every 2 min
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -34,6 +37,7 @@
       applyTheme();
     });
     el('tray-toggle').addEventListener('click', () => setTray(!ui.trayOpen));
+    el('refresh-btn').addEventListener('click', refresh);
 
     const params = new URLSearchParams(location.search);
     const wantDemo = params.has('demo');
@@ -81,16 +85,25 @@
   }
 
   async function startLive(client) {
+    LIVE_CLIENT = client;
     el('mode-badge').textContent = 'Connected — live FHIR data';
     el('mode-badge').classList.add('live');
     setLoading('Loading chart from FHIR server…');
     const resources = await fetchLiveResources(client);
     const vm = buildViewModel(resources);
+    await resolveAttachments(client, vm);
 
-    /* Resolve scanned-media attachments (Binary) for OCR. */
+    VM = vm;
+    renderAll();
+    runOcr(vm);
+    setInterval(refresh, AUTO_REFRESH_MS);
+  }
+
+  /** Resolve scanned-media attachments (Binary) for OCR. */
+  async function resolveAttachments(client, vm) {
     for (const doc of vm.outsideDocs) {
       const att = doc.attachment;
-      if (!att) continue;
+      if (!att || doc.imageDataUrl) continue;
       try {
         if (att.data) {
           doc.imageDataUrl = 'data:' + (att.contentType || 'image/png') + ';base64,' + att.data;
@@ -103,10 +116,50 @@
         console.warn('Could not fetch attachment for', doc.id, e);
       }
     }
+  }
 
-    VM = vm;
-    renderAll();
-    runOcr(vm);
+  /**
+   * Re-pull data and re-render. In live mode this re-queries the FHIR server
+   * (new labs/vitals/orders appear as they result); in demo mode it re-runs
+   * the same pipeline. OCR results are carried over per document so scans are
+   * only OCR'd once.
+   */
+  async function refresh() {
+    if (refreshing || !VM) return;
+    refreshing = true;
+    el('refresh-btn').classList.add('busy');
+    try {
+      const resources = LIVE_CLIENT
+        ? await fetchLiveResources(LIVE_CLIENT)
+        : window.DEMO_BUNDLE.entry.map(e => e.resource);
+      const vm = buildViewModel(resources);
+
+      /* Carry over generated images + OCR results for documents we already processed. */
+      vm.outsideDocs.forEach(doc => {
+        const prev = VM.outsideDocs.find(d => d.id === doc.id);
+        if (prev) {
+          doc.imageDataUrl = prev.imageDataUrl;
+          doc.fallbackText = prev.fallbackText;
+          doc.ocr = prev.ocr;
+        } else if (!LIVE_CLIENT) {
+          const src = (window.DEMO_OUTSIDE_DOCS || []).find(d => d.docRefId === doc.id);
+          if (src) {
+            doc.imageDataUrl = window.renderScannedDoc(src);
+            doc.fallbackText = src.lines.join('\n');
+          }
+        }
+      });
+      if (LIVE_CLIENT) await resolveAttachments(LIVE_CLIENT, vm);
+
+      VM = vm;
+      renderAll();
+      runOcr(vm);
+    } catch (e) {
+      console.warn('Refresh failed:', e);
+    } finally {
+      refreshing = false;
+      el('refresh-btn').classList.remove('busy');
+    }
   }
 
   function blobToDataUrl(blob) {
@@ -181,6 +234,16 @@
     `;
 
     el('tray-body').innerHTML = renderEncounters(vm) + renderOutsideDocs(vm);
+
+    /* Edge tab: surface how much is waiting in the tray */
+    const nDocs = vm.outsideDocs.length;
+    el('tray-toggle').innerHTML =
+      (nDocs ? `<span class="edge-count">${nDocs}</span>` : '') +
+      `<span class="edge-label">Outside records &amp; visits</span>`;
+    el('tray-toggle').classList.toggle('has-docs', nDocs > 0);
+
+    el('refresh-btn').innerHTML = '&#x21bb; <span class="refresh-time">updated ' + esc(fmtTime(new Date().toISOString())) + '</span>';
+
     bindInteractions(vm);
   }
 
@@ -340,6 +403,7 @@
           ${m.source === 'outside' ? '<span class="badge-change">new ' + esc(relDate(m.date || '')) + '</span>' : ''}
         </div>
         <div class="med-dose">${esc(m.dose)}${m.source === 'outside' && m.docLabel ? (m.dose ? ' — ' : '') + 'per ' + esc(m.docLabel) : ''}</div>
+        ${m.priorDose ? '<div class="med-dose faint">previously ' + esc(m.priorDose) + ' (prior order, discontinued)</div>' : ''}
         ${m.note ? '<div class="med-note">' + esc(m.note) + '</div>' : ''}
       </div>`;
 

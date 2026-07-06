@@ -339,6 +339,49 @@ main { padding: 20px 28px 60px; max-width: 1480px; margin: 0 auto; }
 .device { font-size: 13.5px; padding: 4px 0; }
 .device .muted { font-size: 12.5px; }
 
+/* ---------------------------------------------------------- edge tab */
+.edge-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 35;
+  writing-mode: vertical-rl;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px 0 0 10px;
+  padding: 18px 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  box-shadow: -2px 2px 14px rgba(23, 26, 32, 0.22);
+  transition: padding 0.15s, filter 0.15s;
+}
+.edge-tab:hover { filter: brightness(1.08); padding-right: 14px; }
+.edge-count {
+  writing-mode: horizontal-tb;
+  background: #fff;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+  border-radius: 10px;
+  text-align: center;
+}
+[data-theme="dark"] .edge-tab { color: #14171c; }
+[data-theme="dark"] .edge-count { background: #14171c; color: var(--accent); }
+
+.hdr-btn.busy { opacity: 0.5; pointer-events: none; }
+.refresh-time { font-size: 11px; letter-spacing: 0.2px; }
+.hdr-btn.tip::after { left: auto; right: 0; }
+
 /* ---------------------------------------------------------- tray */
 .tray-backdrop {
   position: fixed;

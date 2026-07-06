@@ -15,10 +15,14 @@
     <div class="app-title">ER One-Page Summary</div>
     <div class="header-controls">
       <div id="mode-badge" class="mode-badge">Starting…</div>
-      <button id="tray-toggle" class="hdr-btn">Visits &amp; outside records</button>
+      <button id="refresh-btn" class="hdr-btn tip" data-tip="Refresh chart data now. When connected to a FHIR server, data also refreshes automatically every 2 minutes.">&#x21bb;</button>
       <button id="theme-toggle" class="hdr-btn">Dark</button>
     </div>
   </header>
+
+  <button id="tray-toggle" class="edge-tab" aria-label="Open outside records and visits">
+    <span class="edge-label">Outside records &amp; visits</span>
+  </button>
 
   <main id="main">
     <div class="loading">Loading patient summary…</div>

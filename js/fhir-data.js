@@ -184,19 +184,33 @@ function buildViewModel(resources) {
       source: 'ehr'
     }));
 
-  /* Medications */
-  const meds = (byType.MedicationRequest || [])
+  /* Medications: active orders, plus dose-change detection against prior
+     stopped/completed orders for the same drug (how Epic represents a dose
+     change — the old order is discontinued and a new one is authored). */
+  const allMedReqs = byType.MedicationRequest || [];
+  const medName = m => ccText(m.medicationCodeableConcept) || (m.medicationReference && m.medicationReference.display) || 'Medication';
+  const medDose = m => (m.dosageInstruction && m.dosageInstruction[0] && m.dosageInstruction[0].text) || '';
+  const drugKey = text => text.split(/[\s(]/)[0].toLowerCase();
+
+  const stoppedMeds = allMedReqs.filter(m => ['stopped', 'completed', 'cancelled'].includes(m.status));
+  const meds = allMedReqs
     .filter(m => ['active', 'on-hold'].includes(m.status))
-    .map(m => ({
-      text: ccText(m.medicationCodeableConcept) || (m.medicationReference && m.medicationReference.display) || 'Medication',
-      dose: (m.dosageInstruction && m.dosageInstruction[0] && m.dosageInstruction[0].text) || '',
-      authoredOn: m.authoredOn || '',
-      status: m.status,
-      requester: (m.requester && m.requester.display) || '',
-      note: noteText(m),
-      recentChange: m.authoredOn ? daysBetween(new Date(m.authoredOn), new Date()) <= 30 : false,
-      source: 'ehr'
-    }))
+    .map(m => {
+      const text = medName(m);
+      const dose = medDose(m);
+      const prior = stoppedMeds.find(p => drugKey(medName(p)) === drugKey(text) && medDose(p) && medDose(p) !== dose);
+      return {
+        text,
+        dose,
+        authoredOn: m.authoredOn || '',
+        status: m.status,
+        requester: (m.requester && m.requester.display) || '',
+        note: noteText(m),
+        priorDose: prior ? medDose(prior) : '',
+        recentChange: m.authoredOn ? daysBetween(new Date(m.authoredOn), new Date()) <= 30 : false,
+        source: 'ehr'
+      };
+    })
     .sort((a, b) => new Date(b.authoredOn || 0) - new Date(a.authoredOn || 0));
 
   /* Allergies */
