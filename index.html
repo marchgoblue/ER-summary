@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ER One-Page Summary</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- SMART on FHIR client (used for live Epic connections; demo mode works without a launch context) -->
+  <script src="https://cdn.jsdelivr.net/npm/fhirclient@2.5.4/build/fhir-client.min.js"></script>
+  <!-- Tesseract.js for client-side OCR of scanned outside media -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title">
+      <span class="app-logo">⚡</span>
+      <span>ER One-Page Summary</span>
+    </div>
+    <div id="mode-badge" class="mode-badge">Starting…</div>
+  </header>
+
+  <main id="main">
+    <div class="loading">Loading patient summary…</div>
+  </main>
+
+  <script src="js/fhir-data.js"></script>
+  <script src="js/risk-engine.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/demo-data.js"></script>
+  <script src="js/demo-outside-docs.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

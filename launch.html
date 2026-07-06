@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ER One-Page Summary — SMART Launch</title>
+  <script src="https://cdn.jsdelivr.net/npm/fhirclient@2.5.4/build/fhir-client.min.js"></script>
+</head>
+<body>
+  <p>Launching ER One-Page Summary…</p>
+  <script>
+    /*
+     * SMART on FHIR EHR launch endpoint.
+     * Register this URL as the app's launch URL in the Epic App Orchard /
+     * fhir.epic.com app registration, and index.html as the redirect URL.
+     *
+     * Replace clientId with the Non-Production Client ID issued by
+     * fhir.epic.com before sandbox testing.
+     */
+    FHIR.oauth2.authorize({
+      clientId: 'REPLACE_WITH_EPIC_CLIENT_ID',
+      scope: [
+        'launch',
+        'openid', 'fhirUser',
+        'patient/Patient.read',
+        'patient/Encounter.read',
+        'patient/Condition.read',
+        'patient/MedicationRequest.read',
+        'patient/AllergyIntolerance.read',
+        'patient/Observation.read',
+        'patient/DiagnosticReport.read',
+        'patient/DocumentReference.read',
+        'patient/Binary.read',
+        'patient/Device.read'
+      ].join(' '),
+      redirectUri: 'index.html'
+    });
+  </script>
+</body>
+</html>
