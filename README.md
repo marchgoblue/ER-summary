@@ -1,12 +1,13 @@
 # ER One-Page Summary — SMART on FHIR
 
-A single-page situational-awareness screen for ER physicians at first patient contact. It pulls together, at a glance:
+A single-page situational-awareness screen for ER physicians at first patient contact. Clean, calm UI with light and dark themes. It pulls together, at a glance:
 
-- **Safety-critical flags** — anticoagulation (with recent-bleed cross-referencing), severe allergies, hyperkalemia, lactate, acute hemoglobin drops, AKI vs. baseline creatinine, QTc + QT-prolonging med combinations, implanted devices, beta-blockade masking shock, contrast allergy/AKI imaging conflicts.
+- **A prose "at a glance" narrative** — generated entirely from the FHIR data: who the patient is, why they're here, triage physiology, notable labs with deltas, safety concerns, and recent care trajectory.
+- **Safety-critical flags** — a compact strip of hover-for-detail chips: anticoagulation (with recent-bleed cross-referencing), severe allergies, hyperkalemia, lactate, acute hemoglobin drops, AKI vs. baseline creatinine, QTc + QT-prolonging med combinations, implanted devices, beta-blockade masking shock, contrast allergy/AKI imaging conflicts.
 - **The current ED encounter** — triage vitals with trending, computed bedside scores (qSOFA, SIRS, NEWS2, shock index, anion gap — all derived from FHIR vitals/labs), ECG interpretation, labs resulted since arrival with deltas vs. the most recent prior value, and imaging results/orders.
-- **Background** — active problems, medications (high-risk and recently changed first), allergies, implanted devices.
-- **Recent care** — ED visits, hospitalizations, and clinic visits on a timeline.
-- **Scanned outside media** — DocumentReference attachments are OCR'd in the browser (Tesseract.js) and the extracted diagnoses, medications, labs, and vitals are merged into the main view as discrete data, visibly tagged `OUTSIDE` but otherwise integrated (e.g., an outside discharge hemoglobin becomes the comparison baseline for today's CBC).
+- **Background** — active problems, allergies, implanted devices, and medications with provider-selectable sorting (priority, alphabetical, or by drug class).
+- **Recent care & outside records** — ED visits, hospitalizations, clinic visits, and scanned outside documents in a slide-out side tray.
+- **Scanned outside media** — DocumentReference attachments are OCR'd in the browser (Tesseract.js) and the extracted diagnoses, medications, labs, and vitals are merged into the main view as discrete data, tagged `OUTSIDE` but otherwise integrated (e.g., an outside discharge hemoglobin becomes the comparison baseline for today's CBC). Every `OUTSIDE` tag is clickable and opens the scanned source document.
 
 **This version is demo-only.** It ships with one richly simulated patient, **John Dorian**, a 72-year-old with AFib on apixaban, HFrEF (EF 30%, ICD), CKD 3b, T2DM, and COPD, presenting in probable urosepsis with AKI, AFib with RVR, and a hemoglobin drop — two months after a duodenal-ulcer GI bleed documented **only** in scanned outside records from Sacred Heart Hospital, so the OCR pathway is load-bearing in the demo.
 
@@ -40,6 +41,7 @@ Notes for sandbox testing: Epic's sandbox test patients have sparse data, so sev
 | [launch.html](launch.html) | SMART on FHIR EHR launch endpoint (scopes + client ID) |
 | [js/fhir-data.js](js/fhir-data.js) | Live FHIR queries + normalization into the view model |
 | [js/risk-engine.js](js/risk-engine.js) | Critical-flag detection and bedside score computation |
+| [js/summary.js](js/summary.js) | Generates the prose "at a glance" narrative from the view model |
 | [js/ocr.js](js/ocr.js) | Tesseract OCR of scanned media + discrete-data parsing |
 | [js/app.js](js/app.js) | Mode bootstrap and all rendering |
 | [js/demo-data.js](js/demo-data.js) | John Dorian FHIR R4 bundle (dates anchored to "today") |

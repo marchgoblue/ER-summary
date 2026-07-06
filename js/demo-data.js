@@ -265,7 +265,7 @@ const DEMO_RESOURCES = [
   vital('vs-hr-1', '8867-4', 'Heart rate', 132, '/min', todayAt(14, 38), { interpretation: 'H', note: 'Irregularly irregular' }),
   vital('vs-rr-1', '9279-1', 'Respiratory rate', 26, '/min', todayAt(14, 38), { interpretation: 'H' }),
   vital('vs-spo2-1', '59408-5', 'Oxygen saturation', 88, '%', todayAt(14, 38), { interpretation: 'L', note: 'On room air' }),
-  vital('vs-gcs-1', '9269-2', 'Glasgow coma score total', 14, '{score}', todayAt(14, 38), { note: 'Confused, oriented x2 (baseline per family: fully oriented)' }),
+  vital('vs-gcs-1', '9269-2', 'Glasgow coma score total', 14, '{score}', todayAt(14, 38)),
   vital('vs-wt-1', '29463-7', 'Body weight', 82.4, 'kg', todayAt(14, 40)),
   {
     resourceType: 'Observation',

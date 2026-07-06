@@ -44,7 +44,7 @@
     const ehr = vm.meds.find(m => regex.test(m.text));
     if (ehr) return { text: ehr.text, source: 'ehr' };
     const out = (vm.outsideMeds || []).find(m => regex.test(m.text));
-    if (out) return { text: out.text, source: 'outside' };
+    if (out) return { text: out.text, source: 'outside', docId: out.docId };
     return null;
   }
 
@@ -111,37 +111,37 @@
 
   function computeFlags(vm) {
     const flags = [];
-    const add = (level, label, detail, source) =>
-      flags.push({ level, label, detail: detail || '', source: source || 'ehr' }); // level: critical | warning
+    const add = (level, label, detail, source, docId) =>
+      flags.push({ level, label, detail: detail || '', source: source || 'ehr', docId: docId || null }); // level: critical | warning
 
     /* Anticoagulation */
     const ac = medHit(vm, ANTICOAGULANTS);
     if (ac) {
       const bleedHx = (vm.outsideFindings || []).some(f => /bleed|hemorrhage|melena/i.test(f.text))
         || vm.conditions.some(c => /bleed|hemorrhage/i.test(c.text));
-      add('critical', 'ANTICOAGULATED', ac.text + (bleedHx ? ' — WITH RECENT GI BLEED HISTORY' : ''), ac.source);
+      add('critical', 'Anticoagulated', ac.text + (bleedHx ? ' — with recent GI bleed history' : ''), ac.source, ac.docId);
     }
     const ap = medHit(vm, ANTIPLATELETS);
-    if (ap) add('warning', 'Antiplatelet therapy', ap.text, ap.source);
+    if (ap) add('warning', 'Antiplatelet therapy', ap.text, ap.source, ap.docId);
 
     /* Recent major bleed from outside records */
     (vm.outsideFindings || []).filter(f => f.kind === 'diagnosis' && /bleed|hemorrhage/i.test(f.text)).forEach(f => {
-      add('critical', 'RECENT GI BLEED', f.text + ' (' + f.docLabel + ')', 'outside');
+      add('critical', 'Recent GI bleed', f.text + ' (' + f.docLabel + ')', 'outside', f.docId);
     });
 
     /* Severe allergies */
     vm.allergies.filter(a => a.criticality === 'high' || a.severity === 'severe').forEach(a => {
-      add('critical', 'ALLERGY: ' + a.text.toUpperCase(), a.reaction || 'high criticality', 'ehr');
+      add('critical', 'Allergy: ' + a.text, a.reaction || 'high criticality', 'ehr');
     });
 
     /* Sepsis physiology */
     const lact = vm.labsCurrent.find(l => l.loinc === '2524-7' && typeof l.value === 'number');
-    if (lact && lact.value >= 4) add('critical', 'LACTATE ' + lact.value, 'severe elevation — septic shock threshold');
+    if (lact && lact.value >= 4) add('critical', 'Lactate ' + lact.value, 'severe elevation — septic shock threshold');
     else if (lact && lact.value >= 2) add('warning', 'Lactate ' + lact.value, 'elevated');
 
     /* Hyperkalemia */
     const k = vm.labsCurrent.find(l => l.loinc === '2823-3' && typeof l.value === 'number');
-    if (k && k.value >= 6.0) add('critical', 'HYPERKALEMIA K ' + k.value, 'obtain ECG, treat emergently');
+    if (k && k.value >= 6.0) add('critical', 'Hyperkalemia K ' + k.value, 'obtain ECG, treat emergently');
     else if (k && k.value >= 5.5) add('warning', 'Hyperkalemia K ' + k.value, 'recheck; review ECG for peaked T waves');
 
     /* AKI vs baseline creatinine */
@@ -155,7 +155,7 @@
     const hgbNow = vm.labsCurrent.find(l => l.loinc === '718-7' && typeof l.value === 'number');
     const hgbPrior = vm.priorByLoinc['718-7'];
     if (hgbNow && hgbPrior && hgbPrior.value - hgbNow.value >= 2) {
-      add('critical', 'HGB DROP ' + hgbPrior.value + ' → ' + hgbNow.value, 'vs ' + window.FhirData.relDate(hgbPrior.effective) + (ac ? ' while anticoagulated — evaluate for bleeding' : ''));
+      add('critical', 'Hgb drop ' + hgbPrior.value + ' → ' + hgbNow.value, 'vs ' + window.FhirData.relDate(hgbPrior.effective) + (ac ? ' while anticoagulated — evaluate for bleeding' : ''));
     }
 
     /* QT risk: prolonged QTc on ECG + QT-prolonging meds */
@@ -168,7 +168,7 @@
 
     /* Immunosuppression */
     const im = medHit(vm, IMMUNOSUPPRESSANTS);
-    if (im) add('warning', 'Immunosuppressed', im.text, im.source);
+    if (im) add('warning', 'Immunosuppressed', im.text, im.source, im.docId);
 
     /* Beta blockade masking tachycardia */
     if (medHit(vm, BETA_BLOCKERS)) add('warning', 'Beta-blocked', 'HR response to shock/sepsis may be blunted');

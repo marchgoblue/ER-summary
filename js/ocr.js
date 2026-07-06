@@ -154,15 +154,16 @@
 
       const docLabel = (doc.custodian || 'Outside facility') + ', ' + window.FhirData.fmtDate(doc.date);
       const findings = parseOutsideDocument(text, docLabel);
+      findings.forEach(f => { f.docId = doc.id; });
       doc.ocr = { text, engine, findings };
 
       findings.forEach(f => {
         vm.outsideFindings.push(f);
         if (f.kind === 'medication') {
-          vm.outsideMeds.push({ text: f.text, dose: '', source: 'outside', docLabel, date: doc.date });
+          vm.outsideMeds.push({ text: f.text, dose: '', source: 'outside', docLabel, docId: doc.id, date: doc.date });
         }
         if (f.kind === 'lab' && !f.isNadir) {
-          vm.outsideLabs.push({ loinc: f.loinc, label: f.label, value: f.value, unit: f.unit, effective: doc.date, source: 'outside', docLabel });
+          vm.outsideLabs.push({ loinc: f.loinc, label: f.label, value: f.value, unit: f.unit, effective: doc.date, source: 'outside', docLabel, docId: doc.id });
         }
       });
 

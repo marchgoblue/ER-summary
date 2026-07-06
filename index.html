@@ -12,19 +12,32 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="app-title">
-      <span class="app-logo">⚡</span>
-      <span>ER One-Page Summary</span>
+    <div class="app-title">ER One-Page Summary</div>
+    <div class="header-controls">
+      <div id="mode-badge" class="mode-badge">Starting…</div>
+      <button id="tray-toggle" class="hdr-btn">Visits &amp; outside records</button>
+      <button id="theme-toggle" class="hdr-btn">Dark</button>
     </div>
-    <div id="mode-badge" class="mode-badge">Starting…</div>
   </header>
 
   <main id="main">
     <div class="loading">Loading patient summary…</div>
   </main>
 
+  <div id="tray-backdrop" class="tray-backdrop" onclick="document.getElementById('tray-toggle').click()"></div>
+  <aside id="tray" class="tray" aria-label="Visits and outside records">
+    <div class="tray-head">
+      <span>Visits &amp; outside records</span>
+      <button class="tray-close" onclick="document.getElementById('tray-toggle').click()">✕</button>
+    </div>
+    <div id="tray-body" class="tray-body"></div>
+  </aside>
+
+  <div id="ocr-status" class="ocr-status"></div>
+
   <script src="js/fhir-data.js"></script>
   <script src="js/risk-engine.js"></script>
+  <script src="js/summary.js"></script>
   <script src="js/ocr.js"></script>
   <script src="js/demo-data.js"></script>
   <script src="js/demo-outside-docs.js"></script>
