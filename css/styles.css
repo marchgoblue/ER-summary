@@ -192,6 +192,9 @@ main { padding: 20px 28px 60px; max-width: 1480px; margin: 0 auto; }
   pointer-events: none;
 }
 .tip:hover::after { opacity: 1; visibility: visible; }
+/* When a tooltip anchor is nested inside another (e.g. an OUTSIDE badge on an
+   attention chip), hovering the inner one suppresses the outer tooltip. */
+.tip:has(.tip:hover)::after { opacity: 0; visibility: hidden; }
 
 /* -------------------------------------------------------------- grid */
 .grid {
