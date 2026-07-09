@@ -23,18 +23,35 @@
     return tesseractWorkerPromise;
   }
 
-  /** OCR one image (data URL). Returns { text, engine } */
+  /**
+   * OCR one image (data URL). Returns { text, engine, lines } where lines is
+   * [{ text, confidence }] — Tesseract's 0–100 confidence estimate per
+   * recognized line, used to flag findings that need verification.
+   */
   async function ocrImage(dataUrl, onProgress) {
     try {
       const workerP = getWorker();
       if (!workerP) throw new Error('Tesseract not loaded');
       const worker = await workerP;
-      const { data } = await worker.recognize(dataUrl);
-      return { text: data.text || '', engine: 'tesseract' };
+      const { data } = await worker.recognize(dataUrl, {}, { text: true, blocks: true });
+      return { text: data.text || '', engine: 'tesseract', lines: confidenceLines(data) };
     } catch (err) {
       console.warn('OCR failed, will use fallback text if available:', err);
-      return { text: '', engine: 'failed' };
+      return { text: '', engine: 'failed', lines: [] };
     }
+  }
+
+  /** Flatten a Tesseract result into [{ text, confidence }] per line. */
+  function confidenceLines(data) {
+    const out = [];
+    const push = l => {
+      const text = (l.text || '').trim();
+      if (text) out.push({ text, confidence: typeof l.confidence === 'number' ? l.confidence : null });
+    };
+    (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(push)));
+    /* Older Tesseract.js builds expose lines at the top level instead. */
+    if (!out.length && Array.isArray(data.lines)) data.lines.forEach(push);
+    return out;
   }
 
   /* ----------------------------------------------------- text parsing */
@@ -57,20 +74,25 @@
 
   /**
    * Parse OCR text into discrete findings.
-   * Returns array of { kind, text, value, unit, loinc, isNadir }.
+   * Returns array of { kind, text, value, unit, loinc, isNadir, conf }.
+   * ocrLines ([{ text, confidence }], optional) supplies Tesseract's per-line
+   * confidence; each finding inherits the confidence of the line it came from
+   * (conf is null for fallback text that never went through OCR).
    */
-  function parseOutsideDocument(text, docLabel) {
+  function parseOutsideDocument(text, docLabel, ocrLines) {
     const findings = [];
-    const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+    const lines = (ocrLines && ocrLines.length)
+      ? ocrLines
+      : text.split(/\n/).map(l => ({ text: l.trim(), confidence: null })).filter(l => l.text);
 
     let section = '';
-    for (const line of lines) {
+    for (const { text: line, confidence: conf } of lines) {
       /* Track section headers */
       if (/^discharge diagnos/i.test(line)) { section = 'diagnoses'; continue; }
       if (/^assessment\s*:?/i.test(line)) {
         section = 'diagnoses';
         const inline = line.replace(/^assessment\s*:?\s*/i, '');
-        if (inline) findings.push({ kind: 'diagnosis', text: inline, docLabel });
+        if (inline) findings.push({ kind: 'diagnosis', text: inline, conf, docLabel });
         continue;
       }
       if (/^(discharge medications|new prescription)/i.test(line)) { section = 'medications'; continue; }
@@ -79,7 +101,7 @@
       /* Numbered or bulleted diagnoses */
       if (section === 'diagnoses') {
         const m = line.match(/^\d+\.\s*(.+)$/) || (line.startsWith('-') ? [null, line.slice(1).trim()] : null);
-        if (m) { findings.push({ kind: 'diagnosis', text: m[1], docLabel }); continue; }
+        if (m) { findings.push({ kind: 'diagnosis', text: m[1], conf, docLabel }); continue; }
       }
 
       /* Medication lines */
@@ -87,7 +109,7 @@
         const m = line.match(MED_LINE);
         if (m) {
           const parts = m[1].split(/\s+(?=\d)/);
-          findings.push({ kind: 'medication', text: m[1], drug: parts[0], docLabel });
+          findings.push({ kind: 'medication', text: m[1], drug: parts[0], conf, docLabel });
           continue;
         }
       }
@@ -100,7 +122,7 @@
             kind: 'lab', label: p.label, value: parseFloat(m[1].replace('/', '')) || m[1],
             rawValue: m[1], unit: p.unit, loinc: p.loinc,
             isNadir: !!(p.nadirRe && p.nadirRe.test(line)),
-            text: p.label + ' ' + m[1] + (p.unit ? ' ' + p.unit : ''), docLabel
+            text: p.label + ' ' + m[1] + (p.unit ? ' ' + p.unit : ''), conf, docLabel
           });
         }
       }
@@ -108,12 +130,12 @@
       /* Vitals */
       for (const p of VITAL_PATTERNS) {
         const m = line.match(p.re);
-        if (m) findings.push({ kind: 'vital', label: p.label, rawValue: m[1], unit: p.unit, text: p.label + ' ' + m[1] + ' ' + p.unit, docLabel });
+        if (m) findings.push({ kind: 'vital', label: p.label, rawValue: m[1], unit: p.unit, text: p.label + ' ' + m[1] + ' ' + p.unit, conf, docLabel });
       }
 
       /* Anticoagulation interruption callouts */
       if (/apixaban|warfarin|anticoagul/i.test(line) && /held|resumed|interrupt|stopp/i.test(line)) {
-        findings.push({ kind: 'anticoag-note', text: line, docLabel });
+        findings.push({ kind: 'anticoag-note', text: line, conf, docLabel });
       }
     }
 
@@ -148,17 +170,18 @@
         findings = doc.ocr.findings;
       } else {
         onStatus && onStatus(doc, 'running');
-        let text = '', engine = 'none';
+        let text = '', engine = 'none', ocrLines = null;
         if (doc.imageDataUrl) {
           const res = await ocrImage(doc.imageDataUrl);
-          text = res.text; engine = res.engine;
+          text = res.text; engine = res.engine; ocrLines = res.lines;
         }
         if ((!text || text.trim().length < 40) && doc.fallbackText) {
           text = doc.fallbackText;
           engine = engine === 'tesseract' ? 'tesseract-lowconf-fallback' : 'fallback';
+          ocrLines = null; /* fallback text never went through OCR — no confidences */
         }
 
-        findings = parseOutsideDocument(text, docLabel);
+        findings = parseOutsideDocument(text, docLabel, ocrLines);
         findings.forEach(f => { f.docId = doc.id; });
         doc.ocr = { text, engine, findings };
       }
@@ -166,10 +189,10 @@
       findings.forEach(f => {
         vm.outsideFindings.push(f);
         if (f.kind === 'medication') {
-          vm.outsideMeds.push({ text: f.text, dose: '', source: 'outside', docLabel, docId: doc.id, date: doc.date });
+          vm.outsideMeds.push({ text: f.text, dose: '', source: 'outside', conf: f.conf, docLabel, docId: doc.id, date: doc.date });
         }
         if (f.kind === 'lab' && !f.isNadir) {
-          vm.outsideLabs.push({ loinc: f.loinc, label: f.label, value: f.value, unit: f.unit, effective: doc.date, source: 'outside', docLabel, docId: doc.id });
+          vm.outsideLabs.push({ loinc: f.loinc, label: f.label, value: f.value, unit: f.unit, effective: doc.date, source: 'outside', conf: f.conf, docLabel, docId: doc.id });
         }
       });
 
