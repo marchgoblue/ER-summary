@@ -58,14 +58,16 @@
 
   const LAB_PATTERNS = [
     { re: /h[ae]moglobin(?:\s*nadir)?\s*:?\s*(\d{1,2}\.\d)\s*g\/?dl/i, label: 'Hemoglobin', unit: 'g/dL', loinc: '718-7', nadirRe: /nadir/i },
-    { re: /platelets?\s*:?\s*(\d{2,3})\b/i, label: 'Platelets', unit: '10*3/uL', loinc: '777-3' },
+    { re: /platele\w*\s*:?\s*(\d{2,3})\b/i, label: 'Platelets', unit: '10*3/uL', loinc: '777-3' },
     { re: /creatinine\s*:?\s*(\d{1,2}\.\d)\s*mg\/?dl/i, label: 'Creatinine', unit: 'mg/dL', loinc: '2160-0' },
     { re: /\bINR\s*:?\s*(\d\.\d)\b/i, label: 'INR', unit: '', loinc: '6301-6' }
   ];
 
-  /* Leading letter may be lowercase: OCR often misreads faded capitals, and
-     this only applies to lines inside a medications section. */
-  const MED_LINE = /^[-•*]?\s*([A-Za-z][A-Za-z]+(?:\s*\([A-Za-z ]+\))?\s+\d+(?:\.\d+)?\s*(?:mg|mcg|g|units?)\b[^\n]*)$/;
+  /* Tolerant of OCR damage, safe because it only applies inside a
+     medications section: the bullet may be misread as any symbol (".", "_",
+     "«"), the leading letter may be lowercase (faded capitals), and the dose
+     unit may be mangled ("mg" → "ng", "=g", "m9"). */
+  const MED_LINE = /^[^A-Za-z0-9]{0,2}\s*([A-Za-z][A-Za-z]+(?:\s*\([A-Za-z ]+\))?\s+\d+(?:\.\d+)?\s*(?:[a-z=]{0,2}[gq9]|units?)\b[^\n]*)$/i;
 
   const VITAL_PATTERNS = [
     { re: /temp\w*\s*:?\s*(\d{2}\.\d)\s*C/i, label: 'Temperature', unit: '°C' },
@@ -99,7 +101,7 @@
         if (inline) findings.push({ kind: 'diagnosis', text: inline, conf, docLabel });
         continue;
       }
-      if (/^(discharge medications|new prescription)/i.test(line)) { section = 'medications'; continue; }
+      if (/^[^A-Za-z0-9]{0,3}(discharge med\w*|ne[wv] prescri\w*)/i.test(line)) { section = 'medications'; continue; }
       if (/^(discharge labs|results|vitals|hospital course|follow.?up|instructions|reason for visit)/i.test(line)) { section = 'other'; }
 
       /* Numbered or bulleted diagnoses */
