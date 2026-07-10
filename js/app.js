@@ -13,7 +13,8 @@
   const ui = {
     theme: localStorage.getItem('ers-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
     medSort: localStorage.getItem('ers-medsort') || 'priority',
-    trayOpen: false
+    trayOpen: false,
+    demo: false // set by startDemo; enables the "how is this computed?" dots
   };
   let VM = null;
   let LIVE_CLIENT = null;
@@ -65,6 +66,7 @@
   }
 
   function startDemo() {
+    ui.demo = true;
     el('mode-badge').textContent = 'Demo — simulated patient';
     el('mode-badge').classList.add('demo');
     const resources = window.DEMO_BUNDLE.entry.map(e => e.resource);
@@ -200,7 +202,14 @@
   function lowConfChip(conf, docId) {
     if (typeof conf !== 'number' || conf >= OCR_LOW_CONF) return '';
     const pct = Math.round(conf);
-    return `<span class="badge-lowconf tip" data-doc-id="${esc(docId || '')}" data-tip="Low OCR confidence — Tesseract read this line at ${pct}% confidence. Click to verify against the scanned source document.">&#9888; OCR ${pct}%</span>`;
+    return `<span class="badge-lowconf tip" data-doc-id="${esc(docId || '')}" data-tip="This value was read from a low-quality scanned document. The OCR software (Tesseract) was only ${pct}% confident it read this line correctly — values below ${OCR_LOW_CONF}% get this warning. Verify against the original document before acting on it: click to open the scanned source.">&#9888; LOW-QUALITY SCAN</span>`;
+  }
+
+  /* Demo-mode "how is this computed?" dot: explains the FHIR APIs behind a
+     section and the exact logic applied to them. Hidden in live mode. */
+  function info(text) {
+    if (!ui.demo) return '';
+    return `<span class="info-dot tip tip-info" data-tip="${esc(text)}">i</span>`;
   }
 
   function openDocViewer(doc) {
@@ -213,6 +222,39 @@
   }
 
   /* ------------------------------------------------------------ rendering */
+
+  /* Section explanations for the demo-mode info dots. Each states the FHIR
+     APIs the section reads and exactly how the display is computed — keep
+     these in sync with fhir-data.js, risk-engine.js, summary.js, ocr.js. */
+  const INFO = {
+    banner: 'FHIR APIs: Patient (name, birthDate, gender, MRN identifier) and AllergyIntolerance.\nAge is computed from birthDate. The right side lists allergies with criticality = high; if there are none it says so.',
+
+    summary: 'Every sentence is assembled from structured FHIR data — nothing is free-typed.\n• Opening: Patient + active Conditions + the current Encounter’s reasonCode.\n• Triage: the first reading of each vital this visit (Observation), plus any computed score in its danger range, and BP first → latest if it changed.\n• Labs: current results whose lab-assigned interpretation is abnormal, with the prior value when it changed ≥ 20%.\n• Safety: the critical Attention flags below.\n• Recent care: Encounters from the last 120 days and scanned outside records (DocumentReference).',
+
+    flags: 'Rules computed over FHIR MedicationRequest, Condition, Observation, AllergyIntolerance and Device — plus data OCR’d from scanned outside records (tagged OUTSIDE). Thresholds:\n• Hgb drop: flagged when the most recent prior hemoglobin (incl. outside records) minus the current value is ≥ 2 g/dL.\n• Acute kidney injury: current creatinine ≥ 1.5× the most recent prior.\n• Lactate: warning ≥ 2, critical ≥ 4 mmol/L. Potassium: warning ≥ 5.5, critical ≥ 6.0.\n• Anticoagulated / antiplatelet / immunosuppressed / beta-blocked / insulin: the active med list (EHR + outside) matched against drug-name lists.\n• QTc flag: QTc ≥ 470 ms on this visit’s ECG report AND a QT-prolonging med on the list.\nHover any flag for its specific inputs.',
+
+    vitals: 'FHIR API: Observation (category = vital-signs) linked to the current Encounter.\nEach row is one vital type, matched by LOINC code. When more than one reading exists this visit, the row shows the FIRST reading with an arrow to the LATEST — that is why some rows show two values.\nAnnotations like “Irregularly irregular” or “On room air” are not computed by the app: they are Observation.note text recorded by the documenting clinician, shown verbatim.\nA row is highlighted when the first reading’s interpretation code is H, L or A (abnormal).',
+
+    scores: 'Calculated locally from this visit’s FHIR vitals and labs — hover each score for the exact inputs used.\n• qSOFA: +1 each for SBP ≤ 100, RR ≥ 22, GCS < 15 (danger ≥ 2).\n• SIRS: +1 each for temp > 38 or < 36 °C, HR > 90, RR > 20, WBC > 12 or < 4 (danger ≥ 2).\n• NEWS2: standard point bands for RR, SpO2 (+2 if on oxygen, read from the Observation note), SBP, HR, temp, GCS < 15 (danger ≥ 7).\n• Shock index: HR ÷ SBP (danger ≥ 1.0).\n• Anion gap: Na − Cl − CO2 (danger > 14).',
+
+    ecg: 'FHIR API: DiagnosticReport, classified as an ECG by its category/code text.\nThe text shown is DiagnosticReport.conclusion verbatim — the app does not interpret the tracing itself. (The QTc Attention flag reads the QTc number out of this text.)',
+
+    labs: 'FHIR API: Observation (category = laboratory). “Since arrival” = linked to the current Encounter.\nChange column: each result is compared to the most recent prior result with the same LOINC code — from older EHR results or from OCR’d outside records (tagged OUTSIDE).\nThe delta is emphasized when the change is ≥ 20% of the prior value.\nH/L flags and reference ranges come from the result’s own interpretation and referenceRange fields — the app does not judge normality itself. “Pending” = status registered or preliminary.',
+
+    imaging: 'FHIR API: DiagnosticReport (radiology / echo categories).\nThis visit’s studies are shown first, then the two most recent prior studies.\nImpression text is DiagnosticReport.conclusion verbatim. An “ordered” or “preliminary” badge reflects DiagnosticReport.status.',
+
+    meds: 'FHIR API: MedicationRequest with status active or on-hold, plus medications extracted by OCR from scanned outside records (tagged OUTSIDE).\n• Red dot: drug name matches a built-in high-risk list (anticoagulants, antiplatelets, insulin, amiodarone, etc.).\n• “changed”: the order was authored within the last 30 days. A prior dose is shown when a stopped/completed order exists for the same drug with a different dose — which is how Epic represents a dose change.\n• Priority sort puts high-risk and recently changed meds first.',
+
+    problems: 'FHIR API: Condition with clinicalStatus active, recurrence or relapse.\nItems tagged OUTSIDE were extracted by OCR from a scanned outside document’s DISCHARGE DIAGNOSES or ASSESSMENT section, and are attributed to that document.',
+
+    allergies: 'FHIR API: AllergyIntolerance.\nRed highlight = criticality high. The reaction text is the first reaction.manifestation; severity is shown when recorded.',
+
+    devices: 'FHIR API: Device resources registered to the patient (type, manufacturer, model name).\nEach device also generates a warning-level Attention flag.',
+
+    encounters: 'FHIR API: Encounter, newest first, excluding the current ED visit.\nThe chip maps Encounter.class — IMP → Hospital, EMER → ED, anything else → Clinic. Hospital length of stay is computed from Encounter.period start → end. The description is the Encounter’s reasonCode (or type).',
+
+    outsideDocs: 'FHIR API: DocumentReference categorized as outside/scanned media; in live mode the attached page image is fetched as a FHIR Binary.\nEach image is OCR’d in the browser by Tesseract.js. The raw text is then parsed with pattern rules — section headers (DISCHARGE DIAGNOSES, ASSESSMENT, NEW PRESCRIPTION), med lines with doses, known lab names and vital patterns — into the discrete findings listed here, which are merged into the main view tagged OUTSIDE.\nTesseract also reports how confident it is (0–100) about each line it read; findings from lines under ' + OCR_LOW_CONF + ' get the LOW-QUALITY SCAN warning.'
+  };
 
   function renderAll() {
     const vm = VM;
@@ -264,7 +306,7 @@
       <div class="banner">
         <div class="banner-name">
           <span class="pt-name">${esc(p.name)}</span>
-          <span class="pt-meta">${p.age != null ? p.age + ' yo' : ''} ${esc(p.gender)} · DOB ${esc(fmtDate(p.dob))} · MRN ${esc(p.mrn)}</span>
+          <span class="pt-meta">${p.age != null ? p.age + ' yo' : ''} ${esc(p.gender)} · DOB ${esc(fmtDate(p.dob))} · MRN ${esc(p.mrn)}</span>${info(INFO.banner)}
         </div>
         <div class="banner-allergy ${sev ? '' : 'none'}">${sev ? 'Allergies: ' + esc(sev) : 'No high-risk allergies recorded'}</div>
       </div>`;
@@ -273,7 +315,7 @@
   function renderSummary(vm, flags, scores) {
     const html = window.Summary.generateSummary(vm, flags, scores);
     if (!html) return '';
-    return `<div class="card summary-card">${html}</div>`;
+    return `<div class="card summary-card">${info(INFO.summary)}${html}</div>`;
   }
 
   function renderFlags(flags) {
@@ -282,12 +324,12 @@
       <span class="flag ${f.level} tip" data-tip="${esc(f.detail || f.label)}">
         <span class="dot"></span>${esc(f.label)}${f.source === 'outside' ? outsideBadge(f.docId) + lowConfChip(f.conf, f.docId) : ''}
       </span>`;
-    return card('Attention <span class="sub">hover for detail</span>', `<div class="flag-list">${flags.map(chip).join('')}</div>`);
+    return card('Attention <span class="sub">hover for detail</span>' + info(INFO.flags), `<div class="flag-list">${flags.map(chip).join('')}</div>`);
   }
 
   function renderVitals(vm) {
     const cur = vm.vitals.filter(v => v.thisVisit);
-    if (!cur.length) return card('Triage vitals', '<div class="empty">No vitals recorded this visit</div>');
+    if (!cur.length) return card('Triage vitals' + info(INFO.vitals), '<div class="empty">No vitals recorded this visit</div>');
 
     const order = ['8310-5', '8867-4', '85354-9', '9279-1', '59408-5', '9269-2', '29463-7'];
     const byLoinc = {};
@@ -313,7 +355,7 @@
       </tr>`;
     }).join('');
 
-    return card('Triage vitals <span class="sub">first → latest</span>', `<table class="tbl">${rows}</table>`);
+    return card('Triage vitals <span class="sub">first → latest</span>' + info(INFO.vitals), `<table class="tbl">${rows}</table>`);
   }
 
   function renderScores(scores) {
@@ -323,13 +365,13 @@
         <div class="score-name">${esc(s.name)}</div>
         <div class="score-val">${esc(s.value)}</div>
       </div>`).join('');
-    return card('Computed scores <span class="sub">derived from FHIR vitals &amp; labs — hover for inputs</span>', `<div class="scores">${cells}</div>`);
+    return card('Computed scores <span class="sub">derived from FHIR vitals &amp; labs — hover for inputs</span>' + info(INFO.scores), `<div class="scores">${cells}</div>`);
   }
 
   function renderEcg(vm) {
     const ecgs = vm.reports.filter(r => r.kind === 'ecg' && r.thisVisit);
-    if (!ecgs.length) return card('ECG', '<div class="empty">No ECG this visit</div>');
-    return card('ECG', ecgs.map(r => `
+    if (!ecgs.length) return card('ECG' + info(INFO.ecg), '<div class="empty">No ECG this visit</div>');
+    return card('ECG' + info(INFO.ecg), ecgs.map(r => `
       <div class="report">
         <div class="report-head">${esc(r.label)} <span class="faint">${esc(fmtTime(r.effective))}</span></div>
         <div class="report-body ecg-text">${esc(r.conclusion)}</div>
@@ -337,7 +379,7 @@
   }
 
   function renderCurrentLabs(vm) {
-    if (!vm.labsCurrent.length) return card('Labs since arrival', '<div class="empty">No labs resulted yet</div>');
+    if (!vm.labsCurrent.length) return card('Labs since arrival' + info(INFO.labs), '<div class="empty">No labs resulted yet</div>');
     const rows = vm.labsCurrent.slice().sort((a, b) => new Date(a.effective) - new Date(b.effective)).map(l => {
       const prior = typeof l.value === 'number' ? vm.priorByLoinc[l.loinc] : null;
       let delta = '';
@@ -357,7 +399,7 @@
         <td class="muted">${esc(fmtTime(l.effective))}${l.note ? ' · ' + esc(l.note) : ''}</td>
       </tr>`;
     }).join('');
-    return card('Labs since arrival <span class="sub">change vs most recent prior, incl. outside records</span>',
+    return card('Labs since arrival <span class="sub">change vs most recent prior, incl. outside records</span>' + info(INFO.labs),
       `<table class="tbl labs"><tr class="hd"><th>Test</th><th>Result</th><th>Change</th><th>Ref</th><th>Time</th></tr>${rows}</table>`);
   }
 
@@ -376,7 +418,7 @@
           <div class="report-body">${esc(r.conclusion)}</div>
         </div>`).join('');
     }
-    return card('Imaging', html);
+    return card('Imaging' + info(INFO.imaging), html);
   }
 
   /* ------------------------------------------------------------- meds */
@@ -439,29 +481,29 @@
       `<button class="sort-btn ${sort === key ? 'active' : ''}" data-medsort="${key}">${label}</button>`;
     return `<div class="card">
       <div class="card-head-row">
-        <h3>Medications</h3>
+        <h3>Medications${info(INFO.meds)}</h3>
         <div class="sort-control">${sortBtn('priority', 'Priority')}${sortBtn('alpha', 'A–Z')}${sortBtn('class', 'Class')}</div>
       </div>${body}</div>`;
   }
 
   function renderProblems(vm) {
     const outsideDx = (vm.outsideFindings || []).filter(f => f.kind === 'diagnosis');
-    if (!vm.conditions.length && !outsideDx.length) return card('Active problems', '<div class="empty">No problems recorded</div>');
+    if (!vm.conditions.length && !outsideDx.length) return card('Active problems' + info(INFO.problems), '<div class="empty">No problems recorded</div>');
     const li = vm.conditions.map(c =>
       `<li>${esc(c.text)}${c.note ? ' <span class="muted">— ' + esc(c.note) + '</span>' : ''}</li>`).join('');
     const lo = outsideDx.map(f =>
       `<li>${esc(f.text)}${outsideBadge(f.docId)}${lowConfChip(f.conf, f.docId)} <span class="muted">— ${esc(f.docLabel)}</span></li>`).join('');
-    return card('Active problems', `<ul class="plain-list">${li}${lo}</ul>`);
+    return card('Active problems' + info(INFO.problems), `<ul class="plain-list">${li}${lo}</ul>`);
   }
 
   function renderAllergies(vm) {
-    if (!vm.allergies.length) return card('Allergies', '<div class="empty">No known allergies</div>');
+    if (!vm.allergies.length) return card('Allergies' + info(INFO.allergies), '<div class="empty">No known allergies</div>');
     const rows = vm.allergies.map(a => `
       <div class="allergy ${a.criticality === 'high' ? 'high' : ''}">
         <b>${esc(a.text)}</b> — ${esc(a.reaction || 'reaction not documented')}
         ${a.severity ? '<span class="muted">(' + esc(a.severity) + ')</span>' : ''}
       </div>`).join('');
-    return card('Allergies', rows);
+    return card('Allergies' + info(INFO.allergies), rows);
   }
 
   function renderDevices(vm) {
@@ -469,13 +511,13 @@
     const rows = vm.devices.map(d => `
       <div class="device"><b>${esc(d.text)}</b>${d.detail ? ' — ' + esc(d.detail) : ''}
       ${d.note ? '<div class="muted">' + esc(d.note) + '</div>' : ''}</div>`).join('');
-    return card('Implanted devices', rows);
+    return card('Implanted devices' + info(INFO.devices), rows);
   }
 
   /* --------------------------------------------------------- tray content */
 
   function renderEncounters(vm) {
-    if (!vm.pastEncounters.length) return card('Recent visits &amp; hospitalizations', '<div class="empty">None on file</div>');
+    if (!vm.pastEncounters.length) return card('Recent visits &amp; hospitalizations' + info(INFO.encounters), '<div class="empty">None on file</div>');
     const rows = vm.pastEncounters.map(e => {
       const cls = e.class && e.class.code;
       const kind = cls === 'IMP' ? 'Hospital' : cls === 'EMER' ? 'ED' : 'Clinic';
@@ -491,11 +533,11 @@
           ${who ? '<div class="faint enc-who">' + esc(who) + '</div>' : ''}
         </div>`;
     }).join('');
-    return card('Recent visits &amp; hospitalizations', rows);
+    return card('Recent visits &amp; hospitalizations' + info(INFO.encounters), rows);
   }
 
   function renderOutsideDocs(vm) {
-    if (!vm.outsideDocs.length) return card('Outside records (scanned media)', '<div class="empty">None on file</div>');
+    if (!vm.outsideDocs.length) return card('Outside records (scanned media)' + info(INFO.outsideDocs), '<div class="empty">None on file</div>');
     const rows = vm.outsideDocs.map((doc, i) => {
       const o = doc.ocr;
       let extracted = '<div class="muted">Running OCR on scanned document…</div>';
@@ -522,7 +564,7 @@
           <div class="doc-extract">${extracted}</div>
         </div>`;
     }).join('');
-    return card('Outside records (scanned media) <span class="sub">discrete data extracted via OCR</span>', rows);
+    return card('Outside records (scanned media) <span class="sub">discrete data extracted via OCR</span>' + info(INFO.outsideDocs), rows);
   }
 
   /* --------------------------------------------------------- interactions */
