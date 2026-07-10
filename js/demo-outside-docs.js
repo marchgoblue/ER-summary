@@ -87,6 +87,40 @@
         'call with results. Go to ER for fever, back pain,',
         'vomiting, or confusion.'
       ]
+    },
+    {
+      docRefId: 'doc-outside-fax',
+      title: 'ST VINCENT COMMUNITY CLINIC — FAXED PROGRESS NOTE',
+      /* Rendered as a badly degraded fax so Tesseract reads it with low
+         confidence — exercises the low-OCR-confidence warning chips.
+         Lines matching `smudge` get a pen-scrawl artifact appended, which
+         OCRs as a garbage token and drags that line's confidence down. */
+      messy: true,
+      smudge: /platelets|assessment|prednisone/i,
+      lines: [
+        'ST VINCENT COMMUNITY CLINIC',
+        'TRANSMITTED VIA FAX - IMAGE QUALITY REDUCED',
+        '',
+        'PROGRESS NOTE                Date: ' + dateDaysAgo(7),
+        '',
+        'Patient: DORIAN, JOHN M      DOB: 03/15/1954',
+        'Provider: Robert Kelso, MD',
+        '',
+        'REASON FOR VISIT: Painful swollen left great toe',
+        'x 2 days. No trauma.',
+        '',
+        'POINT OF CARE LABS:',
+        'Platelets 152, INR 1.4',
+        '',
+        'ASSESSMENT: Acute gout flare, left foot',
+        '',
+        'NEW PRESCRIPTION:',
+        '- Prednisone 20 mg daily for 5 days',
+        '- Avoid NSAIDs due to recent GI bleed history',
+        '',
+        'INSTRUCTIONS: Ice and elevate. Follow up with',
+        'primary care in 1 week. ER precautions reviewed.'
+      ]
     }
   ];
 
@@ -95,6 +129,7 @@
    * Returns a PNG data URL.
    */
   window.renderScannedDoc = function (doc) {
+    const messy = !!doc.messy;
     const lineHeight = 26;
     const pad = 46;
     const width = 760;
@@ -109,25 +144,36 @@
     ctx.fillStyle = '#f6f3ea';
     ctx.fillRect(0, 0, width, height);
 
-    // Light scanner noise
-    for (let i = 0; i < 900; i++) {
-      ctx.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.05).toFixed(3) + ')';
-      ctx.fillRect(Math.random() * width, Math.random() * height, 1, 1);
+    // Scanner noise (heavy speckle on messy faxes)
+    for (let i = 0; i < (messy ? 5000 : 900); i++) {
+      ctx.fillStyle = 'rgba(0,0,0,' + (Math.random() * (messy ? 0.16 : 0.05)).toFixed(3) + ')';
+      ctx.fillRect(Math.random() * width, Math.random() * height, messy && Math.random() < 0.3 ? 2 : 1, 1);
     }
 
-    // Slight page skew, as if fed crooked through the scanner
+    // Page skew, as if fed crooked through the scanner
     ctx.save();
     ctx.translate(width / 2, height / 2);
-    ctx.rotate(-0.004);
+    ctx.rotate(messy ? -0.014 : -0.004);
     ctx.translate(-width / 2, -height / 2);
 
-    ctx.fillStyle = '#1c1c22';
+    ctx.fillStyle = messy ? '#5a564d' : '#1c1c22'; // faded toner on messy faxes
     ctx.font = '18px "Courier New", Courier, monospace';
     ctx.textBaseline = 'top';
     doc.lines.forEach((line, i) => {
-      ctx.fillText(line, pad, pad + i * lineHeight);
+      const wobble = messy ? Math.sin(i * 1.7) * 1.5 : 0; // uneven feed
+      const y = pad + i * lineHeight + wobble;
+      ctx.fillText(line, pad, y);
+      if (messy && doc.smudge && line && doc.smudge.test(line)) {
+        const endX = pad + ctx.measureText(line).width;
+        drawScrawl(ctx, endX + 20, y + 9);
+        /* The assessment line has many confident words diluting the garbage
+           token's pull on its average confidence — annotate it twice. */
+        if (/^assess/i.test(line)) drawScrawl(ctx, endX + 150, y + 9);
+      }
     });
     ctx.restore();
+
+    if (messy) degradeScan(canvas, ctx);
 
     // Fax-style header artifact
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -136,4 +182,63 @@
 
     return canvas.toDataURL('image/png');
   };
+
+  /* A short pen scrawl (margin annotation), unreadable by OCR — Tesseract
+     picks it up as a low-confidence garbage token on the same line. */
+  function drawScrawl(ctx, x, y) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(60,55,70,0.85)';
+    ctx.lineWidth = 1.6;
+    for (let pass = 0; pass < 3; pass++) {
+      ctx.beginPath();
+      let cx = x, cy = y + pass * 2 - 2;
+      ctx.moveTo(cx, cy);
+      for (let i = 0; i < 16; i++) {
+        const nx = cx + 7 + Math.random() * 8;
+        const ny = y + (Math.random() - 0.5) * 18;
+        ctx.quadraticCurveTo(cx + 4, cy - 12 + Math.random() * 24, nx, ny);
+        cx = nx; cy = ny;
+      }
+      ctx.stroke();
+    }
+    // ink blots
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = 'rgba(60,55,70,' + (0.4 + Math.random() * 0.4).toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.arc(x + Math.random() * 100, y + (Math.random() - 0.5) * 16, 1 + Math.random() * 2, 0, 7);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* Fax-transmission damage: toner dropout, streaks, and a downscale/upscale
+     pass that blurs glyph edges — drives Tesseract line confidence down. */
+  function degradeScan(canvas, ctx) {
+    const { width, height } = canvas;
+
+    // Toner dropout: paper-colored specks punched through the text
+    for (let i = 0; i < 3200; i++) {
+      ctx.fillStyle = 'rgba(246,243,234,' + (0.35 + Math.random() * 0.45).toFixed(2) + ')';
+      ctx.fillRect(Math.random() * width, Math.random() * height, 1 + Math.random() * 2, 1);
+    }
+
+    // Horizontal fax streaks — some white (dropped rows), some dark
+    for (let i = 0; i < 22; i++) {
+      const y = Math.random() * height;
+      ctx.fillStyle = Math.random() < 0.7
+        ? 'rgba(246,243,234,0.6)'
+        : 'rgba(40,40,40,0.12)';
+      ctx.fillRect(0, y, width, 1 + Math.random() * 2);
+    }
+
+    // Resample down and back up to smear glyph edges
+    const s = document.createElement('canvas');
+    s.width = Math.max(1, Math.round(width * 0.53));
+    s.height = Math.max(1, Math.round(height * 0.53));
+    const sc = s.getContext('2d');
+    sc.imageSmoothingEnabled = true;
+    sc.drawImage(canvas, 0, 0, s.width, s.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(s, 0, 0, s.width, s.height, 0, 0, width, height);
+  }
 })();

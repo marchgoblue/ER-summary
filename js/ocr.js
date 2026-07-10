@@ -63,7 +63,9 @@
     { re: /\bINR\s*:?\s*(\d\.\d)\b/i, label: 'INR', unit: '', loinc: '6301-6' }
   ];
 
-  const MED_LINE = /^[-•*]?\s*([A-Z][A-Za-z]+(?:\s*\([A-Za-z ]+\))?\s+\d+(?:\.\d+)?\s*(?:mg|mcg|g|units?)\b[^\n]*)$/;
+  /* Leading letter may be lowercase: OCR often misreads faded capitals, and
+     this only applies to lines inside a medications section. */
+  const MED_LINE = /^[-•*]?\s*([A-Za-z][A-Za-z]+(?:\s*\([A-Za-z ]+\))?\s+\d+(?:\.\d+)?\s*(?:mg|mcg|g|units?)\b[^\n]*)$/;
 
   const VITAL_PATTERNS = [
     { re: /temp\w*\s*:?\s*(\d{2}\.\d)\s*C/i, label: 'Temperature', unit: '°C' },
@@ -89,9 +91,11 @@
     for (const { text: line, confidence: conf } of lines) {
       /* Track section headers */
       if (/^discharge diagnos/i.test(line)) { section = 'diagnoses'; continue; }
-      if (/^assessment\s*:?/i.test(line)) {
+      /* Tolerant of OCR damage: leading noise glyphs and a mangled word
+         tail (e.g. "« ASSESSNENT:") still anchor the section. */
+      if (/^[^A-Za-z0-9]{0,3}assess\w*\s*:?/i.test(line)) {
         section = 'diagnoses';
-        const inline = line.replace(/^assessment\s*:?\s*/i, '');
+        const inline = line.replace(/^[^A-Za-z0-9]{0,3}assess\w*\s*:?\s*/i, '');
         if (inline) findings.push({ kind: 'diagnosis', text: inline, conf, docLabel });
         continue;
       }
