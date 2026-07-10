@@ -193,6 +193,16 @@
     return `<span class="badge-outside tip" data-doc-id="${esc(docId || '')}" data-tip="Outside record — click to view the scanned source document">OUTSIDE</span>`;
   }
 
+  /* Outside findings whose Tesseract line confidence (0–100) is below this
+     get a verification warning wherever they render. */
+  const OCR_LOW_CONF = 80;
+
+  function lowConfChip(conf, docId) {
+    if (typeof conf !== 'number' || conf >= OCR_LOW_CONF) return '';
+    const pct = Math.round(conf);
+    return `<span class="badge-lowconf tip" data-doc-id="${esc(docId || '')}" data-tip="Low OCR confidence — Tesseract read this line at ${pct}% confidence. Click to verify against the scanned source document.">&#9888; OCR ${pct}%</span>`;
+  }
+
   function openDocViewer(doc) {
     if (!doc || !doc.imageDataUrl) return;
     const overlay = document.createElement('div');
@@ -270,7 +280,7 @@
     if (!flags.length) return '';
     const chip = f => `
       <span class="flag ${f.level} tip" data-tip="${esc(f.detail || f.label)}">
-        <span class="dot"></span>${esc(f.label)}${f.source === 'outside' ? outsideBadge(f.docId) : ''}
+        <span class="dot"></span>${esc(f.label)}${f.source === 'outside' ? outsideBadge(f.docId) + lowConfChip(f.conf, f.docId) : ''}
       </span>`;
     return card('Attention <span class="sub">hover for detail</span>', `<div class="flag-list">${flags.map(chip).join('')}</div>`);
   }
@@ -335,7 +345,7 @@
         const d = l.value - prior.value;
         const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '=';
         const cls = Math.abs(d) / Math.max(Math.abs(prior.value), 0.01) >= 0.2 ? 'delta-big' : 'delta';
-        delta = `<span class="${cls}">${arrow} from ${esc(String(prior.value))} <span class="faint">${esc(relDate(prior.effective))}</span></span>${prior.source === 'outside' ? outsideBadge(prior.docId) : ''}`;
+        delta = `<span class="${cls}">${arrow} from ${esc(String(prior.value))} <span class="faint">${esc(relDate(prior.effective))}</span></span>${prior.source === 'outside' ? outsideBadge(prior.docId) + lowConfChip(prior.conf, prior.docId) : ''}`;
       }
       const pending = l.status === 'registered' || l.status === 'preliminary';
       const abn = ['H', 'L', 'HH', 'LL', 'A'].includes(l.interp);
@@ -398,7 +408,7 @@
       <div class="med">
         <div class="med-line">
           ${HIGH_RISK_MED.test(m.text) ? '<span class="risk-mark tip" data-tip="High-risk medication">●</span>' : ''}${esc(m.text)}
-          ${m.source === 'outside' ? outsideBadge(m.docId) : ''}
+          ${m.source === 'outside' ? outsideBadge(m.docId) + lowConfChip(m.conf, m.docId) : ''}
           ${m.recentChange && m.source !== 'outside' ? '<span class="badge-change">changed ' + esc(relDate(m.authoredOn)) + '</span>' : ''}
           ${m.source === 'outside' ? '<span class="badge-change">new ' + esc(relDate(m.date || '')) + '</span>' : ''}
         </div>
@@ -440,7 +450,7 @@
     const li = vm.conditions.map(c =>
       `<li>${esc(c.text)}${c.note ? ' <span class="muted">— ' + esc(c.note) + '</span>' : ''}</li>`).join('');
     const lo = outsideDx.map(f =>
-      `<li>${esc(f.text)}${outsideBadge(f.docId)} <span class="muted">— ${esc(f.docLabel)}</span></li>`).join('');
+      `<li>${esc(f.text)}${outsideBadge(f.docId)}${lowConfChip(f.conf, f.docId)} <span class="muted">— ${esc(f.docLabel)}</span></li>`).join('');
     return card('Active problems', `<ul class="plain-list">${li}${lo}</ul>`);
   }
 
@@ -499,7 +509,7 @@
         ].filter(g => g[1].length);
         extracted = groups.map(([title, items]) =>
           `<div class="subhead">${title}</div><ul class="plain-list">` +
-          items.map(f => `<li>${esc(f.text)}${f.isNadir ? ' <span class="muted">(nadir)</span>' : ''}</li>`).join('') +
+          items.map(f => `<li>${esc(f.text)}${f.isNadir ? ' <span class="muted">(nadir)</span>' : ''}${lowConfChip(f.conf, f.docId)}</li>`).join('') +
           '</ul>').join('') +
           `<div class="ocr-engine">${o.engine === 'tesseract' ? 'Extracted via OCR (Tesseract.js)' : 'OCR unavailable — simulated extraction from document text'}</div>`;
       }

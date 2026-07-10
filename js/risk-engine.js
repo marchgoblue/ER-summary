@@ -44,7 +44,7 @@
     const ehr = vm.meds.find(m => regex.test(m.text));
     if (ehr) return { text: ehr.text, source: 'ehr' };
     const out = (vm.outsideMeds || []).find(m => regex.test(m.text));
-    if (out) return { text: out.text, source: 'outside', docId: out.docId };
+    if (out) return { text: out.text, source: 'outside', docId: out.docId, conf: out.conf };
     return null;
   }
 
@@ -111,22 +111,22 @@
 
   function computeFlags(vm) {
     const flags = [];
-    const add = (level, label, detail, source, docId) =>
-      flags.push({ level, label, detail: detail || '', source: source || 'ehr', docId: docId || null }); // level: critical | warning
+    const add = (level, label, detail, source, docId, conf) =>
+      flags.push({ level, label, detail: detail || '', source: source || 'ehr', docId: docId || null, conf: conf != null ? conf : null }); // level: critical | warning
 
     /* Anticoagulation */
     const ac = medHit(vm, ANTICOAGULANTS);
     if (ac) {
       const bleedHx = (vm.outsideFindings || []).some(f => /bleed|hemorrhage|melena/i.test(f.text))
         || vm.conditions.some(c => /bleed|hemorrhage/i.test(c.text));
-      add('critical', 'Anticoagulated', ac.text + (bleedHx ? ' — with recent GI bleed history' : ''), ac.source, ac.docId);
+      add('critical', 'Anticoagulated', ac.text + (bleedHx ? ' — with recent GI bleed history' : ''), ac.source, ac.docId, ac.conf);
     }
     const ap = medHit(vm, ANTIPLATELETS);
-    if (ap) add('warning', 'Antiplatelet therapy', ap.text, ap.source, ap.docId);
+    if (ap) add('warning', 'Antiplatelet therapy', ap.text, ap.source, ap.docId, ap.conf);
 
     /* Recent major bleed from outside records */
     (vm.outsideFindings || []).filter(f => f.kind === 'diagnosis' && /bleed|hemorrhage/i.test(f.text)).forEach(f => {
-      add('critical', 'Recent GI bleed', f.text + ' (' + f.docLabel + ')', 'outside', f.docId);
+      add('critical', 'Recent GI bleed', f.text + ' (' + f.docLabel + ')', 'outside', f.docId, f.conf);
     });
 
     /* Severe allergies */
@@ -168,7 +168,7 @@
 
     /* Immunosuppression */
     const im = medHit(vm, IMMUNOSUPPRESSANTS);
-    if (im) add('warning', 'Immunosuppressed', im.text, im.source, im.docId);
+    if (im) add('warning', 'Immunosuppressed', im.text, im.source, im.docId, im.conf);
 
     /* Beta blockade masking tachycardia */
     if (medHit(vm, BETA_BLOCKERS)) add('warning', 'Beta-blocked', 'HR response to shock/sepsis may be blunted');
