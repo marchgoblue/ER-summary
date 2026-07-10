@@ -421,6 +421,19 @@ const DEMO_RESOURCES = [
     custodian: { display: 'WellNow Urgent Care — Sacred Heart affiliate' },
     description: 'Scanned urgent care after-visit summary from ' + dateDaysAgo(4) + ' (dysuria — started ciprofloxacin).',
     content: [{ attachment: { contentType: 'image/png', title: 'urgent_care_avs.png' } }]
+  },
+  {
+    resourceType: 'DocumentReference',
+    id: 'doc-outside-fax',
+    status: 'current',
+    type: { coding: [{ system: 'http://loinc.org', code: '11506-3', display: 'Progress note' }], text: 'Faxed Progress Note (scanned outside record)' },
+    category: [{ text: 'Outside Records — Scanned Media' }],
+    subject: PATIENT_REF,
+    date: daysAgo(7, 11, 0),
+    author: [{ display: 'Robert Kelso, MD' }],
+    custodian: { display: 'St. Vincent Community Clinic' },
+    description: 'Low-quality faxed progress note from ' + dateDaysAgo(7) + ' (gout flare — started prednisone).',
+    content: [{ attachment: { contentType: 'image/png', title: 'st_vincent_fax.png' } }]
   }
 ];
 
