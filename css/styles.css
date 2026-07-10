@@ -331,6 +331,37 @@ main { padding: 20px 28px 60px; max-width: 1480px; margin: 0 auto; }
 }
 .badge-outside:hover { border-color: var(--text); color: var(--text); }
 
+/* Demo-mode "how is this computed?" dots */
+.info-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 10.5px;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-left: 8px;
+  vertical-align: 1px;
+  cursor: help;
+  transition: border-color 0.15s, color 0.15s;
+}
+.info-dot:hover { border-color: var(--text); color: var(--text); }
+.tip-info::after {
+  white-space: pre-line;
+  max-width: 400px;
+  font-style: normal;
+  font-weight: 400;
+}
+.summary-card .info-dot { float: right; margin-top: 2px; }
+.banner .info-dot { margin-left: 10px; }
+
 /* Low-OCR-confidence warning on outside findings (see OCR_LOW_CONF in app.js) */
 .badge-lowconf {
   display: inline-block;
